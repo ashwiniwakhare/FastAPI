@@ -1,13 +1,18 @@
 # FastAPI main application setup
+import re
 from turtle import title
 from urllib import response
 from webbrowser import get
 from fastapi import FastAPI, Depends, status, Response, HTTPException
 from pydantic import BaseModel
 from . import schemas
-from . import models
+from . import models,hashing
 from .database import engine, SessionLocal
 from sqlalchemy.orm import Session
+from typing import List
+from passlib.context import CryptContext
+from .hashing import Hash
+
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -25,7 +30,7 @@ def get_db():
         db.close()
 
 # API endpoint → Create a new blog entry
-@app.post("/blog", status_code=status.HTTP_201_CREATED)
+@app.post("/blog", status_code=status.HTTP_201_CREATED,tags=['blogs'])
 def create(request: schemas.Blog, db: Session = Depends(get_db)):
     # Creating a new Blog instance using data received
     new_blog = models.Blog(title=request.title, body=request.body)
@@ -35,13 +40,13 @@ def create(request: schemas.Blog, db: Session = Depends(get_db)):
     return new_blog        # Return inserted blog
     
 # API endpoint → Get all blogs
-@app.get("/blogs")
+@app.get("/blogs", response_model=List[schemas.ShowBlog],tags=['blogs'])
 def get_allblogs(db: Session = Depends(get_db)):
     blogs = db.query(models.Blog).all()  # Fetch all records
     return blogs
 
 # API endpoint → Get a single blog by ID
-@app.get('/blog/{id}', status_code=status.HTTP_200_OK)
+@app.get('/blog/{id}', status_code=status.HTTP_200_OK,response_model=schemas.ShowBlog,tags=['blogs'])
 def get_show(id, db: Session = Depends(get_db)):
     blog = db.query(models.Blog).filter(models.Blog.id == id).first()
     
@@ -55,7 +60,7 @@ def get_show(id, db: Session = Depends(get_db)):
     return blog  # Return blog if found
 
 # Delete a specific blog by ID
-@app.delete('/blog/{id}', status_code=status.HTTP_204_NO_CONTENT)
+@app.delete('/blog/{id}', status_code=status.HTTP_204_NO_CONTENT,tags=['blogs'])
 def destroy(id, db: Session = Depends(get_db)):
     # Filter the blog record based on the given id
     blog = db.query(models.Blog).filter(models.Blog.id == id)
@@ -79,7 +84,7 @@ def destroy(id, db: Session = Depends(get_db)):
 
 
 # Update a specific blog by ID
-@app.put('/blog/{id}', status_code=status.HTTP_202_ACCEPTED)
+@app.put('/blog/{id}', status_code=status.HTTP_202_ACCEPTED,tags=['blogs'])
 def update(id, request: schemas.Blog, db: Session = Depends(get_db)):
 
     # Convert Pydantic object to dictionary before update
@@ -99,3 +104,37 @@ def update(id, request: schemas.Blog, db: Session = Depends(get_db)):
     return {"message": "Blog updated successfully"}
 
     
+    
+# pwd_cxt=CryptContext(schemes=["bcrypt"],deprecated="auto")
+
+# @app.post("/user", status_code=status.HTTP_201_CREATED)
+# def create_user(request: schemas.User, db: Session = Depends(get_db)):
+#     hashedPassword=pwd_cxt.hash(request.password)
+#     new_user=models.User(name=request.name,email=request.email,password=hashedPassword)
+#     db.add(new_user)
+#     db.commit()
+#     db.refresh(new_user)
+#     return new_user
+
+
+pwd_cxt = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+@app.post("/user", response_model=schemas.ShowUser, status_code=status.HTTP_201_CREATED,tags=['user'])
+def create_user(request: schemas.User, db: Session = Depends(get_db)):
+    # password = request.password[:72]  # truncate long passwords
+    # hashedPassword = pwd_cxt.hash(password)
+    new_user = models.User(name=request.name,email=request.email,password=Hash.bcrypt(request.password))
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@app.get('/user/{id}',response_model=schemas.ShowUser,tags=['user'])
+def get_user(id:int,db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User .id == id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"user with id {id} does not exist")
+    return user 
