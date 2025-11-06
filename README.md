@@ -11,5 +11,3 @@ A secure and scalable Blog REST API built using **FastAPI**, **JWT Authenticatio
 
 ## 📌 Tech Stack
 FastAPI | SQLAlchemy | JWT | OAuth2 | Uvicorn | Passlib
-
-## 📂 Project Structure
